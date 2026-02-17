@@ -4,10 +4,10 @@ A Python tool that automatically detects Japanese text in images, translates it 
 
 ## Features
 
-- 🔍 **OCR Detection**: Uses Google Cloud Vision API to accurately detect Japanese text and its bounding boxes
-- 🌐 **AI Translation**: Leverages OpenAI GPT models for natural, context-aware translations
+- 🔍 **Smart OCR Detection**: Uses Google Cloud Vision Document Text Detection for word-level extraction with DBSCAN clustering to group words into speech bubbles
+- 🌐 **AI Translation**: Leverages OpenAI GPT models with manga-optimized prompts for natural, emotional translations
 - 🎨 **Smart Inpainting**: Removes original text and fills the area naturally using OpenCV inpainting
-- 📝 **Text Rendering**: Places translated text in the original text's location with appropriate sizing
+- 📝 **Word-Wrapped Text Rendering**: Automatically wraps translated text to fit within bounding boxes with dynamic font sizing
 - 📁 **Batch Processing**: Process entire directories of images at once
 
 ## Project Structure
@@ -20,14 +20,14 @@ ocr-japanese-translator/
 ├── requirements.txt        # Python dependencies
 ├── src/
 │   ├── __init__.py
-│   ├── ocr.py              # Google Vision OCR module
+│   ├── ocr.py              # Google Vision OCR with DBSCAN clustering
 │   ├── translator.py       # OpenAI translation module
-│   ├── image_utils.py      # Image processing utilities
-│   └── pipeline.py         # Main translation pipeline
+│   ├── image_utils.py      # Image processing & text rendering
+│   └── pipeline.py         # Main translation pipeline orchestrator
 ├── input/                  # Place images here for processing
 │   └── *.png
 └── output/                 # Translated images are saved here
-    └── *_translated.png
+    └── *.png
 ```
 
 ## Setup
@@ -117,30 +117,60 @@ python main.py --input-dir ./manga --output-dir ./translated
 
 ## How It Works
 
-1. **Text Detection**: The pipeline uses Google Cloud Vision API to detect all Japanese text in the image, along with precise bounding box coordinates for each text region.
+### 1. Text Detection & Clustering
 
-2. **Translation**: Each detected Japanese text is sent to OpenAI's GPT model with a specialized prompt for manga/Japanese content translation.
+The pipeline uses a sophisticated approach to detect and group text:
 
-3. **Image Inpainting**: Original text is removed using OpenCV's inpainting algorithm, which intelligently fills in the removed area based on surrounding pixels.
+- **Document Text Detection**: Google Cloud Vision API extracts individual words with precise bounding boxes
+- **Japanese Filtering**: Only text containing Japanese characters (Hiragana, Katakana, Kanji) is processed
+- **DBSCAN Clustering**: Words are clustered into groups using distance-based clustering (eps=60 pixels) to identify speech bubbles and text blocks
+- **Box Merging**: Each cluster's bounding boxes are merged into a single region for translation
 
-4. **Text Rendering**: Translated English text is rendered in the original text's location, with automatic font sizing to fit within the bounding box.
+### 2. Translation
 
-## Configuration
+Each detected text group is sent to OpenAI's GPT model with a specialized manga prompt:
 
-Edit `config.py` to customize:
+```
+Translate this Japanese manga dialogue to natural English.
+Keep tone emotional and short.
+Return only translation.
+```
 
-```python
-# Translation settings
-TARGET_LANGUAGE = "English"
-SOURCE_LANGUAGE = "Japanese"
+Batch translation is attempted first for context, with fallback to individual translations.
 
-# Font settings
-DEFAULT_FONT_SIZE = 20
-FONT_COLOR = (0, 0, 0)  # Black text
+### 3. Image Processing
 
-# Image processing
-MIN_CONFIDENCE = 0.5     # Minimum OCR confidence
-PADDING_RATIO = 0.1     # Padding around text boxes
+- **Inpainting**: Original text is removed using OpenCV's TELEA inpainting algorithm with 8px padding
+- **Word Wrapping**: Translated text is automatically wrapped to fit within the bounding box width
+- **Dynamic Font Sizing**: Font size is calculated based on box height (22% of height)
+- **Centered Rendering**: Text is centered both horizontally and vertically within each region
+
+## Technical Details
+
+### Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `google-cloud-vision` | OCR and text detection |
+| `openai` | GPT translation API |
+| `opencv-python` | Image processing and inpainting |
+| `Pillow` | Text rendering with fonts |
+| `scikit-learn` | DBSCAN clustering algorithm |
+| `numpy` | Array operations |
+| `python-dotenv` | Environment variable management |
+
+### Text Detection Pipeline
+
+```
+Image → Document Text Detection → Word Extraction
+                                          ↓
+                              Japanese Character Filter
+                                          ↓
+                              DBSCAN Clustering (eps=60)
+                                          ↓
+                              Bounding Box Merging
+                                          ↓
+                              Translation Groups
 ```
 
 ## Supported Image Formats
@@ -166,8 +196,34 @@ PADDING_RATIO = 0.1     # Padding around text boxes
 - Try a different model with `--model gpt-4`
 
 ### Text not fitting in bounding box
-- Adjust `DEFAULT_FONT_SIZE` in config.py
-- The system will automatically try to fit text, but very long translations may need manual adjustment
+- The system automatically wraps text and sizes fonts
+- Very long translations may need manual adjustment
+- Consider using a more concise translation model
+
+### Single characters being translated oddly
+- The system filters for Japanese text but single characters (like の, を, た) may produce odd translations
+- This is expected behavior for isolated particles - they work better when clustered with surrounding text
+
+## Example Output
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║           Japanese Image Translator (OCR + GPT)               ║
+║                   日本語 → English                             ║
+╚═══════════════════════════════════════════════════════════════╝
+
+Processing: input/manga.png
+  [1/3] Detecting Japanese text...
+       Found 5 text regions in 0.86s
+  [2/3] Translating text to English...
+       'こんにちは' → 'Hello!'
+       'ありがとう' → 'Thank you!'
+       Completed translations in 2.34s
+  [3/3] Rendering translated text...
+       Saved to: output/manga.png
+       Processing completed in 0.15s
+       ✓ Done! Processed 5 text regions
+```
 
 ## License
 
