@@ -30,39 +30,6 @@ ocr-japanese-translator/
     └── *.png
 ```
 
-## Setup
-
-### 1. Create Virtual Environment
-
-```bash
-python -m venv .venv
-source .venv/bin/activate  # On macOS/Linux
-# or
-.\.venv\Scripts\activate   # On Windows
-```
-
-### 2. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Configure API Keys
-
-Create a `.env` file in the project root:
-
-```env
-OPENAI_API_KEY=your_openai_api_key
-GOOGLE_CLOUD_API_KEY=your_google_cloud_api_key
-```
-
-#### Getting API Keys:
-
-- **OpenAI API Key**: Go to [OpenAI API Keys](https://platform.openai.com/api-keys) to create one
-- **Google Cloud API Key**: 
-  1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-  2. Create a project and enable the Cloud Vision API
-  3. Create an API key with Vision API access
 
 ## Usage
 
@@ -180,20 +147,6 @@ Image → Document Text Detection → Word Extraction
 - WebP (.webp)
 
 ## Troubleshooting
-
-### "Could not load image"
-- Ensure the image file exists and is not corrupted
-- Check the file extension matches the actual format
-
-### "Vision API error"
-- Verify your Google Cloud API key is valid
-- Ensure the Vision API is enabled in your Google Cloud project
-- Check your API quota and billing
-
-### "Translation error"
-- Verify your OpenAI API key is valid
-- Check your API credits/quota
-- Try a different model with `--model gpt-4`
 
 ### Text not fitting in bounding box
 - The system automatically wraps text and sizes fonts
