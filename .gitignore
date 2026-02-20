@@ -97,7 +97,7 @@ celerybeat.pid
 
 # Environments
 .env
-.venv
+.venv/
 env/
 venv/
 ENV/
@@ -133,7 +133,6 @@ dmypy.json
 # Project specific
 temp.txt
 *.tmp
-/input/
 /output/
 /image-Japanese-text-translation.pdf
 /manga-translate-pipeline.py
