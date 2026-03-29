@@ -1,15 +1,13 @@
 """Image processing utilities for text inpainting and rendering."""
 
 import os
-from typing import List, Tuple, Optional
-from pathlib import Path
+from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from config import FONT_COLOR, PADDING_RATIO, BASE_DIR
-from .ocr import TextBoundingBox
+from config import FONT_COLOR
 
 
 class ImageProcessor:
@@ -103,6 +101,171 @@ class ImageProcessor:
         inpainted = cv2.inpaint(image, mask, 3, cv2.INPAINT_TELEA)
         
         return inpainted
+
+    def _load_font(self, font_size: int) -> ImageFont.ImageFont:
+        """
+        Load the configured font at the requested size.
+        
+        Args:
+            font_size: Font size in pixels
+            
+        Returns:
+            Pillow font object
+        """
+        try:
+            if self.font_path:
+                return ImageFont.truetype(self.font_path, font_size)
+        except Exception:
+            pass
+        
+        return ImageFont.load_default()
+
+    def _wrap_text(
+        self,
+        draw: ImageDraw.ImageDraw,
+        text: str,
+        font: ImageFont.ImageFont,
+        max_width: int
+    ) -> List[str]:
+        """
+        Wrap text into multiple lines that fit within a maximum width.
+        
+        Args:
+            draw: Pillow drawing context
+            text: Text to wrap
+            font: Font used for measuring
+            max_width: Maximum allowed line width
+            
+        Returns:
+            Wrapped lines
+        """
+        words = text.split()
+        if not words:
+            return [text]
+        
+        lines = []
+        current_line = ""
+
+        def split_word(word: str) -> List[str]:
+            """Split a single overlong word into chunks that fit the box width."""
+            chunks = []
+            current_chunk = ""
+            
+            for char in word:
+                test_chunk = f"{current_chunk}{char}"
+                bbox = draw.textbbox((0, 0), test_chunk, font=font)
+                chunk_width = bbox[2] - bbox[0]
+                
+                if chunk_width <= max_width or not current_chunk:
+                    current_chunk = test_chunk
+                    continue
+                
+                chunks.append(current_chunk)
+                current_chunk = char
+            
+            if current_chunk:
+                chunks.append(current_chunk)
+            
+            return chunks
+        
+        for word in words:
+            bbox = draw.textbbox((0, 0), word, font=font)
+            word_width = bbox[2] - bbox[0]
+            word_parts = split_word(word) if word_width > max_width else [word]
+            
+            for word_part in word_parts:
+                test_line = f"{current_line} {word_part}".strip()
+                bbox = draw.textbbox((0, 0), test_line, font=font)
+                text_width = bbox[2] - bbox[0]
+                
+                if text_width <= max_width or not current_line:
+                    current_line = test_line
+                    continue
+                
+                lines.append(current_line)
+                current_line = word_part
+        
+        if current_line:
+            lines.append(current_line)
+        
+        return lines
+
+    def _measure_wrapped_text(
+        self,
+        draw: ImageDraw.ImageDraw,
+        lines: List[str],
+        font: ImageFont.ImageFont,
+        line_spacing: int
+    ) -> Tuple[int, int]:
+        """
+        Measure the rendered size of wrapped text.
+        
+        Args:
+            draw: Pillow drawing context
+            lines: Wrapped text lines
+            font: Font used for measuring
+            line_spacing: Extra pixels between lines
+            
+        Returns:
+            Tuple of (max_width, total_height)
+        """
+        if not lines:
+            return 0, 0
+        
+        widths = []
+        heights = []
+        
+        for line in lines:
+            bbox = draw.textbbox((0, 0), line, font=font)
+            widths.append(bbox[2] - bbox[0])
+            heights.append(bbox[3] - bbox[1])
+        
+        total_height = sum(heights) + max(0, len(lines) - 1) * line_spacing
+        return max(widths, default=0), total_height
+
+    def _fit_text_to_box(
+        self,
+        draw: ImageDraw.ImageDraw,
+        text: str,
+        box_width: int,
+        box_height: int
+    ) -> Tuple[ImageFont.ImageFont, List[str], int]:
+        """
+        Find the largest font size that allows wrapped text to fit the box.
+        
+        Args:
+            draw: Pillow drawing context
+            text: Text to render
+            box_width: Width of target box
+            box_height: Height of target box
+            
+        Returns:
+            Tuple of (font, wrapped_lines, line_spacing)
+        """
+        safe_width = max(1, box_width - 4)
+        safe_height = max(1, box_height - 4)
+        start_size = max(12, min(int(box_height * 0.35), 48))
+        
+        best_font = self._load_font(12)
+        best_lines = [text]
+        best_spacing = 2
+        
+        for font_size in range(start_size, 7, -1):
+            font = self._load_font(font_size)
+            line_spacing = max(1, font_size // 8)
+            lines = self._wrap_text(draw, text, font, safe_width)
+            text_width, text_height = self._measure_wrapped_text(
+                draw, lines, font, line_spacing
+            )
+            
+            if text_width <= safe_width and text_height <= safe_height:
+                return font, lines, line_spacing
+            
+            best_font = font
+            best_lines = lines
+            best_spacing = line_spacing
+        
+        return best_font, best_lines, best_spacing
     
     def draw_text_with_wrapping(
         self,
@@ -124,57 +287,25 @@ class ImageProcessor:
         for (x1, y1, x2, y2), text in regions_text:
             box_width = x2 - x1
             box_height = y2 - y1
-            
-            # Calculate font size based on box height
-            font_size = max(16, int(box_height * 0.22))
-            
-            # Load font
-            try:
-                if self.font_path:
-                    font = ImageFont.truetype(self.font_path, font_size)
-                else:
-                    font = ImageFont.load_default()
-            except Exception:
-                font = ImageFont.load_default()
-            
-            # Word wrap the text
-            words = text.split()
-            lines = []
-            current_line = ""
-            
-            for word in words:
-                test_line = current_line + " " + word if current_line else word
-                bbox = draw.textbbox((0, 0), test_line, font=font)
-                text_width = bbox[2] - bbox[0]
-                
-                if text_width < box_width:
-                    current_line = test_line
-                else:
-                    if current_line:
-                        lines.append(current_line)
-                    current_line = word
-            
-            if current_line:
-                lines.append(current_line)
-            
-            # Calculate total text height
-            total_height = len(lines) * (font_size + 3)
-            
-            # Center text vertically
-            y = y1 + (box_height - total_height) // 2
+            font, lines, line_spacing = self._fit_text_to_box(
+                draw, text, box_width, box_height
+            )
+            _, total_height = self._measure_wrapped_text(draw, lines, font, line_spacing)
+            y = y1 + max(0, (box_height - total_height) // 2)
             
             # Draw each line
             for line in lines:
                 bbox = draw.textbbox((0, 0), line, font=font)
                 text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
                 
                 # Center text horizontally
-                x = x1 + (box_width - text_width) // 2
+                x = x1 + max(0, (box_width - text_width) // 2)
                 
                 # Draw text in black
-                draw.text((x, y), line, fill="black", font=font)
+                draw.text((x, y), line, fill=FONT_COLOR, font=font)
                 
-                y += font_size + 3
+                y += text_height + line_spacing
         
         return pil_image
     

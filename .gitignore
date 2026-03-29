@@ -133,6 +133,6 @@ dmypy.json
 # Project specific
 temp.txt
 *.tmp
-/output/
+#/output/
 /image-Japanese-text-translation.pdf
 /manga-translate-pipeline.py

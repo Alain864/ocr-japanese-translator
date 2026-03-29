@@ -1,0 +1,150 @@
+# OCR Japanese Translator - Cline Rules
+
+## Project Overview
+
+This is a Python-based Japanese image translator that:
+- Detects Japanese text in images using Google Cloud Vision OCR
+- Clusters words into speech bubbles using DBSCAN
+- Translates text to English using OpenAI GPT models
+- Renders translated text back onto images with inpainting
+
+## Code Style Guidelines
+
+### Python Conventions
+- Use **Python 3.8+** features (type hints, f-strings, dataclasses)
+- Follow **PEP 8** style guidelines
+- Use **4 spaces** for indentation
+- Maximum line length: **100 characters**
+- Use **double quotes** for strings (consistent with existing code)
+- Add **docstrings** to all modules, classes, and public functions
+
+### Imports
+- Standard library imports first
+- Third-party imports second
+- Local/application imports last
+- Separate each group with a blank line
+- Sort imports alphabetically within each group
+
+### Type Hints
+- Always use type hints for function parameters and return values
+- Use `Optional[T]` for optional parameters
+- Use `List[T]`, `Dict[K, V]`, `Tuple[...]` from typing module
+- Use `from typing import ...` for type annotations
+
+### Error Handling
+- Use try/except blocks for external API calls (Google Vision, OpenAI)
+- Provide fallback mechanisms where appropriate
+- Log errors with descriptive messages
+- Never silently catch exceptions without handling
+
+## Project Structure
+
+```
+ocr-japanese-translator/
+├── .env                    # API keys (never commit)
+├── config.py               # Configuration constants
+├── main.py                 # CLI entry point
+├── requirements.txt        # Dependencies
+├── src/
+│   ├── __init__.py
+│   ├── ocr.py              # OCRProcessor class
+│   ├── translator.py       # Translator class
+│   ├── image_utils.py      # ImageProcessor class
+│   └── pipeline.py         # TranslationPipeline class
+├── input/                  # Input images
+└── output/                 # Translated images
+```
+
+## Module-Specific Rules
+
+### config.py
+- Centralize all configuration constants
+- Use pathlib.Path for file paths
+- Load environment variables using python-dotenv
+- Define default values for optional settings
+
+### src/ocr.py
+- Handle Google Cloud Vision API errors gracefully
+- Use DBSCAN clustering with configurable eps parameter
+- Filter for Japanese characters (Hiragana, Katakana, Kanji)
+- Return structured TextBoundingBox objects
+
+### src/translator.py
+- Use OpenAI API for translation
+- Implement batch translation with individual fallback
+- Keep translation prompts concise and manga-optimized
+- Handle rate limiting and API errors
+
+### src/image_utils.py
+- Use OpenCV for image processing
+- Implement inpainting with TELEA algorithm
+- Calculate dynamic font sizing based on bounding box
+- Ensure word wrapping fits within text regions
+
+### src/pipeline.py
+- Orchestrate the complete translation workflow
+- Use dataclasses for structured results
+- Provide progress output for batch processing
+- Handle errors at each pipeline stage
+
+## Testing Guidelines
+
+- Place test files in a `tests/` directory
+- Use pytest for testing
+- Mock external API calls (Google Vision, OpenAI)
+- Test edge cases: empty images, no text detected, API failures
+
+## Security & Environment
+
+### API Keys
+- **NEVER** commit API keys to version control
+- Store keys in `.env` file (listed in `.gitignore`)
+- Required environment variables:
+  - `OPENAI_API_KEY`
+  - `GOOGLE_CLOUD_API_KEY`
+
+### File Handling
+- Validate image paths before processing
+- Support PNG, JPEG, and WebP formats
+- Create output directories if they don't exist
+- Handle file I/O errors gracefully
+
+## Best Practices
+
+### Logging
+- Use print statements with clear formatting for CLI output
+- Include timing information for performance monitoring
+- Show progress indicators for batch operations
+- Use consistent formatting with box-drawing characters
+
+### Performance
+- Batch API calls when possible
+- Use efficient numpy operations for image processing
+- Cache OCR results for repeated processing
+- Process images in parallel for batch operations (when applicable)
+
+### Code Organization
+- Keep modules focused on single responsibilities
+- Use dataclasses for data structures
+- Prefer composition over inheritance
+- Document complex algorithms with comments
+
+## Common Patterns
+
+### Adding a New Feature
+1. Create or update appropriate module in `src/`
+2. Add configuration to `config.py` if needed
+3. Update `main.py` CLI if user-facing
+4. Add docstrings and type hints
+5. Test with sample images
+
+### Modifying the Pipeline
+1. Update the relevant processing step
+2. Ensure error handling is in place
+3. Maintain backwards compatibility for CLI arguments
+4. Update README if user-facing behavior changes
+
+### Adding Dependencies
+1. Add to `requirements.txt` with version constraints
+2. Document the purpose in README.md
+3. Consider impact on existing modules
